@@ -1,0 +1,37 @@
+  async createTable(tableName, attributes, options, model) {
+    let sql = '';
+
+    options = { ...options };
+
+    if (options && options.uniqueKeys) {
+      _.forOwn(options.uniqueKeys, uniqueKey => {
+        if (uniqueKey.customIndex === undefined) {
+          uniqueKey.customIndex = true;
+        }
+      });
+    }
+
+    if (model) {
+      options.uniqueKeys = options.uniqueKeys || model.uniqueKeys;
+    }
+
+    attributes = _.mapValues(attributes, attribute => this.sequelize.normalizeAttribute(attribute));
+
+    // Postgres requires special SQL commands for ENUM/ENUM[]
+    await this.ensureEnums(tableName, attributes, options, model);
+
+    if (!tableName.schema && (options.schema || (!!model && model._schema))) {
+      tableName = this.queryGenerator.addSchema({
+        tableName,
+        _schema: (!!model && model._schema) || options.schema
+      });
+    }
+
+    attributes = this.queryGenerator.attributesToSQL(attributes, {
+      table: tableName,
+      context: 'createTable'
+    });
+    sql = this.queryGenerator.createTableQuery(tableName, attributes, options);
+
+    return await this.sequelize.query(sql, options);
+  }
